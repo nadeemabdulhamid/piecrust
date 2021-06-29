@@ -107,7 +107,7 @@ ignore primary key field if it's in the dictionary
       handler-wrapper crud-op
       
       (lambda (req)
-        (define pk (db-bind-primkey bndg))  ; primary key name
+        (define pk (string-downcase (db-bind-primkey bndg)))  ; primary key name
         (define all-field-names (db-bind-col-names bndg))
         (define field-map (db-bind-field-map bndg)) ; (hashof string db-field)
 
@@ -119,18 +119,24 @@ ignore primary key field if it's in the dictionary
         (define field-vals
           (for/list ([fn all-field-names]
                      #:unless (string-ci=? fn pk))
-            (define json-sym (db-field-json-symbol (hash-ref field-map fn)))
-            (unless (hash-has-key? post-json json-sym)
-              (raise-api-error (format "missing ~a field" json-sym)))
-            (define val (hash-ref post-json json-sym))
-            (cons fn val)))
+            (match (hash-ref field-map fn)
+              [(db-field _ json-sym sql-type null-ok? _)
+               (define json-sym (db-field-json-symbol (hash-ref field-map fn)))
+               (define sql-type (db-field-sql-type (hash-ref field-map fn)))
+               
+               (define val
+                 (cond [(hash-has-key? post-json json-sym) (hash-ref post-json json-sym)]
+                       [null-ok? 'null]
+                       [else (raise-api-error (format "missing ~a field" json-sym))]))
+               
+               (cons fn (jsexpr->sql-type val sql-type))])))
 
         (define sql-str (build-insert-sql bndg field-vals))
         (define stmt (prepare db sql-str))
         (define stmt+params (bind-prepared-statement stmt (map cdr field-vals)))
         (define result (query db stmt+params))
   
-        (define pk-symbol (string->symbol (string-downcase pk)))
+        (define pk-symbol (db-field-json-symbol (hash-ref field-map pk)))
         (define new-id (cdr (assoc 'insert-id (simple-result-info result))))
         
         (apply-post-wrapper
@@ -279,7 +285,7 @@ ignore primary key field if it's in the dictionary
              (prepare db (format "select ~a from ~a where ~a = ?"
                                  (string-join select-field-names ", ")
                                  (db-bind-table bndg)
-                                 (db-bind-primkey bndg))))
+                                 (string-downcase (db-bind-primkey bndg)))))
            (define result (query-maybe-row db stmt id))
            
            (unless result (raise-api-error "invalid id"))
@@ -303,7 +309,7 @@ ignore primary key field if it's in the dictionary
          handler-wrapper crud-op
 
          (lambda (req)
-           (define pk (db-bind-primkey bndg))  ; primary key name
+           (define pk (string-downcase (db-bind-primkey bndg)))  ; primary key name
            (define all-field-names (db-bind-col-names bndg))
            (define field-map (db-bind-field-map bndg)) ; (hashof string db-field)
 
@@ -354,7 +360,7 @@ ignore primary key field if it's in the dictionary
          handler-wrapper crud-op
 
          (lambda (req)
-           (define pk (db-bind-primkey bndg))  ; primary key name
+           (define pk (string-downcase (db-bind-primkey bndg)))  ; primary key name
 
            (define sql-str (format "DELETE FROM ~a WHERE ~a = ?" (db-bind-table bndg) pk))
            (define stmt (prepare db sql-str))

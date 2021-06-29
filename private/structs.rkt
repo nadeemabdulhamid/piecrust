@@ -19,10 +19,13 @@
 
 
 (define crud-op/c (symbols 'create 'query 'read 'update 'delete))
+(define sql-type/c (symbols 'text 'integer 'real 'blob 'null 'boolean 'numeric))
 
 (struct/contract db-field
                  ([col-name string?]
                   [json-symbol symbol?]
+                  [sql-type sql-type/c]
+                  [can-be-null? boolean?]
                   [label string?])
                  #:transparent)
 
@@ -58,10 +61,27 @@
 (define (db-bind-field-map a-dbb)
   (for/hash ([fld (db-bind-fields a-dbb)])
     (match fld
-      [(db-field col-name json-symbol label) 
+      [(db-field col-name _ _ _ _)
        (values (string-downcase col-name) fld)])))
 
+
+;; TODO: this is really loose
+;; this is jsexpr -> sql values
+(define (jsexpr->sql-type val sql-type)
+  (match sql-type
+    ['text   (match val
+               [(or 'null #f) sql-null]
+               [_ val])]
+    
+    [_ val]))
+
+
+;; this is sql values -> jsexpr
 (define (result-vector->dict field-map field-names value-vector)
+  (define (sql-null->null x) (if (eq? x sql-null) 'null x))
+  
   (for/hasheq ([fn field-names]
                [val value-vector])
-    (values (db-field-json-symbol (hash-ref field-map fn)) val)))
+    (values (db-field-json-symbol (hash-ref field-map fn)) (sql-null->null val))))
+
+
