@@ -32,11 +32,7 @@ END
 
 (define (go-live disp-func)
   (serve/servlet disp-func
-                 #:servlet-regexp #rx""
-                 #:servlets-root "."
-                 #:servlet-path "/"
-                 #:extra-files-paths (list ".")
-                 #:launch-browser? #f))
+                 #:servlet-regexp #rx"" #:servlet-path "/" #:launch-browser? #f))
 
 
 (define dbc (sqlite3-connect #:database 'memory))
@@ -148,5 +144,5 @@ JSON
 
 
 ; to run:
-;    (go-live (api-dispatcher store-api))
+;    (serve/servlet (api-dispatcher store-api) #:servlet-regexp #rx"" #:servlet-path "/")
 
