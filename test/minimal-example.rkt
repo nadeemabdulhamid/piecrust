@@ -46,7 +46,7 @@ END
   (create-api-manager "" ; API endpoint
                       dbc          ; database connection
                       "Stores"     ; table name
-                      `(("Store_id" id integer "Internal ID")  
+                      `((["Store_id" id] integer "Internal ID")  
                         ("Name" text #f "Store name")
                         ("Address" text))  ; table columns
                       "Store_id")) ; primary key

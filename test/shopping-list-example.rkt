@@ -62,9 +62,9 @@ END
   (create-api-manager "api/stores" ; API endpoint
                       dbc          ; database connection
                       "Stores"     ; table name
-                      `(("Store_id" id "Internal ID")  
-                        ("Name" "Store name")
-                        ("Address"))  ; table columns
+                      `((["Store_id" id] integer "Internal ID")  
+                        ("Name" text "Store name")
+                        ("Address" text))  ; table columns
                       "Store_id" ; primary key
 
                       #:request-wrapper
@@ -79,10 +79,10 @@ END
   (create-api-manager "api/v1/items"
                       dbc
                       "Items"
-                      `(("ID")
-                        ("Store_id" store-id "Store ID")
-                        ("Name")
-                        ("Brand"))
+                      `(("ID" integer)
+                        (["Store_id" store-id] integer #f "Store ID")
+                        ("Name" text #f)
+                        ("Brand" text))
                       "ID"
 
                       #:response-wrapper

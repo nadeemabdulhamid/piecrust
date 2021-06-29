@@ -65,11 +65,13 @@
         string?
         connection?
         string?
-        (listof (or/c (list/c string? sql-type/c)
-                      (list/c string? sql-type/c boolean?)
-                      (list/c string? symbol? sql-type/c string?)
-                      (list/c string? sql-type/c boolean? string?)
-                      (list/c string? symbol? sql-type/c boolean? string?)))
+        (listof (or/c (list/c string? sql-type/c) ; 2
+                      (list/c string? sql-type/c string?) ; 3
+                      (list/c string? sql-type/c boolean?) ; 3 - ambiguous
+                      (list/c (list/c string? symbol?) sql-type/c string?) ; 3+
+                      (list/c (list/c string? symbol?) sql-type/c boolean?) ; 3+ - ambiguous
+                      (list/c string? sql-type/c boolean? string?) ; 4
+                      (list/c (list/c string? symbol?) sql-type/c boolean? string?))) ; 4+
         string?)
        (#:fallback-request-handler (or/c false/c (request? . -> . any))
         #:request-wrapper (or/c false/c (-> request? crud-op/c (request? . -> . response?) response?))
@@ -82,13 +84,24 @@
 
   (define flds (map (λ(col-info)
                       (match col-info
-                        [(list col-name field-name type null-ok? label) (db-field col-name field-name type null-ok? label)]
-                        [(list col-name field-name/type type/null-ok? label)
-                         (if (and (symbol? field-name/type) (symbol? type/null-ok?))
-                             (db-field col-name field-name/type type/null-ok? #t label)
-                             (db-field col-name (field-name-gen col-name) field-name/type type/null-ok? label))]
-                        [(list col-name type null-ok?) (db-field col-name (field-name-gen col-name) type null-ok? col-name)]
-                        [(list col-name type) (db-field col-name (field-name-gen col-name) type #t col-name)]))
+                        [(list col-name type)   ; 2
+                         (db-field col-name (field-name-gen col-name) type #t col-name)]
+
+                        [(list [list col-name field-name] type null-ok?/label) ; 3+
+                         (if (boolean? null-ok?/label)
+                             (db-field col-name field-name type null-ok?/label col-name)
+                             (db-field col-name field-name type #t null-ok?/label))]
+                        
+                        [(list col-name type null-ok?/label) ; 3
+                         (if (boolean? null-ok?/label)
+                             (db-field col-name (field-name-gen col-name) type null-ok?/label col-name)
+                             (db-field col-name (field-name-gen col-name) type #t null-ok?/label))]
+
+                        [(list [list col-name field-name] type null-ok? label) ; 4+
+                         (db-field col-name field-name type null-ok? label)]
+
+                        [(list col-name type null-ok? label) ; 4
+                         (db-field col-name (field-name-gen col-name) type null-ok? label)]))
                     columns))
 
   (define bnd (db-bind table-name flds primary-key))
