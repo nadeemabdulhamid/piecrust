@@ -17,7 +17,8 @@
 
 
 (provide create-api-manager
-         api-dispatcher)
+         api-dispatcher
+         (struct-out exn:fail:api:error))
 
 
 
