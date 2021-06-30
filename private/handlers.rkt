@@ -298,7 +298,9 @@ ignore primary key field if it's in the dictionary
 
 
 
-
+#|
+ PUT  /api/{id}    <json req body>
+|#
 (define (api/update-handler an-api)
   (define crud-op 'update)
   
@@ -349,7 +351,9 @@ ignore primary key field if it's in the dictionary
 
 
 
-
+#|
+ DELETE  /api/{id}  
+|#
 (define (api/delete-handler an-api)
   (define crud-op 'delete)
   

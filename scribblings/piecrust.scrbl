@@ -1,22 +1,47 @@
 #lang scribble/manual
 
+@require[scribble/core scribble/html-properties]
+
 @require[@for-label[piecrust
                     racket/base
                     web-server/dispatch
                     web-server/servlet-env]]
+
+@(define target-blank
+   (style #f (list (attributes '((target . "_blank"))))))
+
+@(define hilite
+   (background-color-property "cyan"))
+
 
 @title{Pie Crust}
 @author[(author+email "Nadeem Abdul Hamid" "nadeem@acm.org")]
 
 @defmodule[piecrust]
 
-Pie Crust is an automated (RESTful) CRUD API generator for use with the library for
+Pie Crust is an automated (RESTful)
+@hyperlink["https://en.wikipedia.org/wiki/Create,_read,_update_and_delete" #:style target-blank]{CRUD}
+API generator for use with the library for
 @other-manual['(lib "web-server/scribblings/web-server.scrbl")].
 
 @bold{Warning:}
 This library should be treated as an @emph{alpha} release. It has not been stress-tested or
-bullet-proofed. Bug reports, feature requests, and pull requests are welcomed at the Github
-repo.
+bullet-proofed. Bug reports, feature requests, and pull requests are welcomed at the
+@hyperlink["https://github.com/nadeemabdulhamid/piecrust" #:style target-blank]{Github repo}.
+
+In particular:
+@itemlist[
+ @item{This library has only been tested/used with small SQLite databases.}
+ @item{It assumes either @tt{TEXT} or @tt{INTEGER} fields.
+  Conversion to and from JSON and SQL data types is minimal to non-existent at this point.}
+ @item{Although there shouldn't be any (i.e. properly parameterized queries are generated and
+  used), it has not been thoroughly vetted for safety from injection attacks.}
+ @item{The first time you try to use it, something's bound to not work. (One cannot be
+ too pessimistic.)}
+ ]
+
+With all that said, feel free to try it out and @bold{have fun}! Use cases and ideas for
+improvement are welcome, as noted above.
 
 @section{Quick Start}
 
@@ -62,6 +87,89 @@ The following code will launch a JSON API on @tt{http://localhost:8000}.
                 #:servlet-regexp #rx""
                 #:servlet-path "/")
  )
+
+With this server running, the follow endpoints are provided:
+
+@itemlist[
+ @item{@element[(style #f (list hilite))]{@elem["(GET)" @hspace[5] @tt{/api-endpoint}]} @(linebreak)
+        Retrieves all data records in the table as a list of JSON dictionaries.
+
+        @tabular[#:style 'boxed
+                 #:row-properties '(() bottom-border ())
+                 (list (list @bold{Query Parameters} 'cont)
+                       (list @bold{Name and value pattern} @bold{Example})
+                       (list @tt{_fields=<field-name>,...} @tt{/api-endpoint?_fields=id,name})
+                       (list "Retrieves only the specified fields from each record. Field names
+                              are case-sensitive." 'cont)
+                       (list @~ 'cont)
+                       (list @tt{_sort=<field-name>} @tt{/api-endpoint?_sort=address})
+                       (list @tt{_order=[asc|desc]} @tt{/api-endpoint?_sort=address&_order=desc})
+                       (list "Sorts records by the specified field in ascending/descending order."
+                             'cont)
+                       (list @~ 'cont)
+                       (list @tt{*=<data>} @tt{/api-endpoint?*=street})
+                       (list "Searches for the specified data in any of the fields of each record."
+                             'cont)
+                       (list @~ 'cont)
+                       (list @tt{<field-name>=<data>} @tt{/api-endpoint?name=LLC})
+                       (list "Searches for the specified data in the named field. If multiple fields
+                              are specified as separate query parameters, the criteria are combined
+                              with AND. If a * query parameter is specified, any named fields
+                              are ignored."
+                             'cont)
+                    )]
+  @(linebreak)}
+
+  @item{@element[(style #f (list hilite))]{@elem["(GET)" @hspace[5] @tt{/api-endpoint/<id>}]}
+        @(linebreak)
+        Retrieves the single data record with the given primary key value (@tt{<id>}
+        as a JSON dictionary.
+
+        @tabular[#:style 'boxed
+                 #:row-properties '(() bottom-border ())
+                 (list (list @bold{Query Parameters} 'cont)
+                       (list @bold{Name and value pattern} @bold{Example})
+                       (list @tt{_fields=<field-name>,...} @tt{/api-endpoint/42?_fields=name,address})
+                       (list "Retrieves only the specified fields. Field names
+                              are case-sensitive." 'cont))]
+  @(linebreak)}
+
+  @item{@element[(style #f (list hilite))]{@elem["(POST)" @hspace[5] @tt{/api-endpoint}]}
+        @(linebreak)
+        Adds a new row to the database table. A JSON dictionary must be provided
+        in the body of the @tt{POST} request. For example:
+  @verbatim|{
+    { "name" : "CoCost", "address" : "987 Center Lane" }
+    }|
+
+       Upon success, responds with a dictionary containing the primary key field and
+       value of the newly added row.       
+  @(linebreak)}
+
+ @item{@element[(style #f (list hilite))]{@elem["(PUT)" @hspace[5] @tt{/api-endpoint/<id>}]}
+        @(linebreak)
+        Updates the row identified by the specified primary key value (@tt{<id>}).
+        A JSON dictionary must be provided in the body of the @tt{POST} request with
+        the fields and values that are to be updated.
+  @(linebreak)}
+               
+ @item{@element[(style #f (list hilite))]{@elem["(DELETE)" @hspace[5] @tt{/api-endpoint/<id>}]}
+        @(linebreak)
+        Deletes the row identified by the specified primary key value (@tt{<id>}).
+  @(linebreak)}          
+]
+
+
+
+
+@subsubsection{Notes on the generated API}
+
+@itemlist[
+ @item{The default for the JSON keys generated and used for query parameters is to
+      lowercase the specified SQL column names (e.g. @tt{Address} becomes @tt{address}).}
+ @item{On a @tt{POST} request to create a new record, the primary key field and its value
+  is ignored if it is specified in the JSON dictionary in the body of the request.}
+ ]
 
 
 
