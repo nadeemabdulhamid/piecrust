@@ -9,8 +9,10 @@
          web-server/servlet-env
          web-server/dispatchers/dispatch)
 
-(define (setup-database)
-  (define dbc (sqlite3-connect #:database 'memory))
+(define (setup-database dbc)
+  (query-exec dbc "DROP TABLE IF EXISTS Stores")
+  (query-exec dbc "DROP TABLE IF EXISTS Items")
+  
   (query-exec dbc "CREATE TABLE Stores ( Store_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                          Name TEXT NOT NULL,
                          Address TEXT);")
@@ -40,24 +42,22 @@ END
 
 (define (go-live disp-func)
   (serve/servlet disp-func
-               #:servlet-regexp #rx""
-               #:servlets-root "."
-               #:servlet-path "/"
-               #:extra-files-paths (list ".")
-               #:launch-browser? #f))
+                 #:servlet-regexp #rx"" #:servlet-path "/" #:launch-browser? #f))
 
 
 
+(define dbc (sqlite3-connect #:database 'memory))
+(setup-database dbc)
 
-(define dbc (setup-database))
-
+;; A default generic request handler for root path "/" requests
 (define (main-servlet req)
   (if (equal? "" (path/param-path (first (url-path (request-uri req)))))
       (response/xexpr `(body (h1 "Shopping List - API Endpoints")
                              (a ([href "/api/stores"]) "Stores") (br)
                              (a ([href "/api/v1/items"]) "Items")))
-      (next-dispatcher)))
+      (next-dispatcher))) ; hand everything else off to the next dispatcher
 
+;; Stores API endpoint
 (define store-api
   (create-api-manager "api/stores" ; API endpoint
                       dbc          ; database connection
@@ -75,13 +75,14 @@ END
 
                       #:fallback-request-handler main-servlet))
 
+;; Items API endpoint
 (define items-api
   (create-api-manager "api/v1/items"
                       dbc
                       "Items"
                       `(("ID" integer)
                         (["Store_id" store-id] integer #f "Store ID")
-                        ("Name" text #f)
+                        ("Name" text #f) ; must be non-null
                         ("Brand" text))
                       "ID"
 
@@ -93,9 +94,10 @@ END
 
                       #:error-wrapper
                       (λ (exn crud-op resp-code jsexpr)
-                        (response/jsexpr (make-immutable-hasheq `((operation . ,(symbol->string crud-op))
+                        (response/jsexpr
+                         (make-immutable-hasheq `((operation . ,(symbol->string crud-op))
                                                                   (message . ,jsexpr)))
-                                         #:code resp-code))
+                         #:code resp-code))
                               
                       #:fallback-request-handler (api-dispatcher store-api)))
 
