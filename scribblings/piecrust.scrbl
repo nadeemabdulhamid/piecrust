@@ -52,6 +52,8 @@ dispatching function (based on @racket[dispatch-rules]) that can be used with @r
 
 @subsection{Minimal Example}
 
+(Running code for this example is in the @tt{piecrust/test/minimal-example.rkt} file.)
+
 Consider an SQLite database set up like this:
 
 @verbatim|{
@@ -74,7 +76,7 @@ The following code will launch a JSON API on @tt{http://localhost:8000}.
  (define dbc (sqlite3-connect ...))
 
  (define store-api
-   (create-api-manager ""           ; API endpoint
+   (create-api-manager "/api-endpoint"
                        dbc          ; database connection
                        "Stores"     ; table name
                          ; table column schema
@@ -88,7 +90,9 @@ The following code will launch a JSON API on @tt{http://localhost:8000}.
                 #:servlet-path "/")
  )
 
-With this server running, the follow endpoints are provided:
+@subsubsection{Generated endpoints and request formats}
+
+With the server above running, the follow endpoints are provided:
 
 @itemlist[
  @item{@element[(style #f (list hilite))]{@elem["(GET)" @hspace[5] @tt{/api-endpoint}]} @(linebreak)
@@ -222,8 +226,8 @@ With this server running, the follow endpoints are provided:
           )]{
  Produces an API manager instance.
 
- The @code{endpoint-path} should be a slash-separated path string specifying the endpoint
- from which the API will be served, for example, @racket["/myapi/v1"].
+ The @code{endpoint-path} should be a slash-separated path string specifying the base
+ endpoint from which the API will be served, for example, @racket["/myapi/v1"].
 
 }
 

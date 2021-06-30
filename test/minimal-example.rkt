@@ -39,7 +39,7 @@ END
 (setup-database dbc)
 
 (define store-api
-  (create-api-manager "" ; API endpoint
+  (create-api-manager "/" ; API endpoint
                       dbc          ; database connection
                       "Stores"     ; table name
                       `((["Store_id" id] integer "Internal ID")  
