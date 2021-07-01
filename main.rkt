@@ -18,13 +18,19 @@
 
 (provide create-api-manager
          api-dispatcher
+         api-db
          (struct-out exn:fail:api:error))
 
 
 
 (define-syntax (create-api-manager stx)
   (syntax-parse stx
-    [(_ endpoint-path:str rest ...)
+    [(_ endpoint-path:str
+        database-conn
+        table-name:str
+        columns
+        primary-key:str
+        rest ...)
 
      (define pieces (string-split (syntax->datum #'endpoint-path) "/"))
 
@@ -45,6 +51,10 @@
                            [else (or else-dispatcher api/default-else)])])
               disp)))
         endpoint-path
+        database-conn
+        table-name
+        columns
+        primary-key
         rest ...)]))
 
 
