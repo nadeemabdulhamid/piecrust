@@ -9,7 +9,6 @@
          json
          web-server/http
          web-server/servlet
-         web-server/dispatchers/dispatch
          "private/structs.rkt"
          "private/handlers.rkt"
          (for-syntax syntax/parse
@@ -59,6 +58,7 @@
 
 
 
+
 (define/contract
   (_create-api-manager dispatch-gen
                        api-path
@@ -66,6 +66,8 @@
                        table-name
                        columns
                        primary-key
+
+                       #:joins (joins '())
                        #:fallback-request-handler (else-req-handler #f)
                        #:request-wrapper (pre-wrapper #f)
                        #:response-wrapper (post-wrapper #f)
@@ -76,15 +78,10 @@
         string?
         connection?
         string?
-        (listof (or/c (list/c string? sql-type/c) ; 2
-                      (list/c string? sql-type/c string?) ; 3
-                      (list/c string? sql-type/c boolean?) ; 3 - ambiguous
-                      (list/c (list/c string? symbol?) sql-type/c string?) ; 3+
-                      (list/c (list/c string? symbol?) sql-type/c boolean?) ; 3+ - ambiguous
-                      (list/c string? sql-type/c boolean? string?) ; 4
-                      (list/c (list/c string? symbol?) sql-type/c boolean? string?))) ; 4+
+        (listof field-bind-spec/c) 
         string?)
-       (#:fallback-request-handler (or/c false/c (request? . -> . any))
+       (#:joins (listof join-spec/c)
+        #:fallback-request-handler (or/c false/c (request? . -> . any))
         #:request-wrapper (or/c false/c (-> request? crud-op/c (request? . -> . response?) response?))
         #:response-wrapper (or/c false/c (jsexpr? crud-op/c . -> . response?))
         #:error-wrapper (or/c false/c (exn? crud-op/c response-code/c jsexpr? . -> . response?))
@@ -92,8 +89,8 @@
 
       api?)
 
-
-  (define flds (map (λ(col-info)
+  (define field-bind-spec->db-field
+    (λ(col-info)
                       (match col-info
                         [(list col-name type)   ; 2
                          (db-field col-name (field-name-gen col-name) type #t col-name)]
@@ -112,10 +109,18 @@
                          (db-field col-name field-name type null-ok? label)]
 
                         [(list col-name type null-ok? label) ; 4
-                         (db-field col-name (field-name-gen col-name) type null-ok? label)]))
-                    columns))
+                         (db-field col-name (field-name-gen col-name) type null-ok? label)])))
 
-  (define bnd (db-bind table-name flds primary-key))
+  (define flds (map field-bind-spec->db-field columns))
+
+  (define joins/final (for/list ([join joins])
+                        (match join
+                          [(list a [list b fld-spec] c)
+                           (list a [list b (map field-bind-spec->db-field fld-spec)] c)]
+                          [(list a [list b fld-spec c] [list d e] f)
+                           (list a [list b (map field-bind-spec->db-field fld-spec) c] [list d e] f)])))
+
+  (define bnd (db-bind table-name flds primary-key joins/final))
 
   (define (wrapper-lookup type)
     (match type

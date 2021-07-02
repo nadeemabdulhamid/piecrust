@@ -5,7 +5,8 @@
 (define pkg-desc "An automated (RESTful) CRUD API generator for use with the Racket web server.")
 
 (define deps '("base"
-               "db"))
+               "db"
+               "web-server"))
 
 (define build-deps '("scribble-lib" "racket-doc" "rackunit-lib"))
 

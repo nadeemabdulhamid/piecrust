@@ -156,6 +156,7 @@ ignore primary key field if it's in the dictionary
  /api?{field}={blah}&_sort={fieldname}&_order={asc|desc}    query
  /api?*={blah}....
  /api?_fields={fieldname,...}    select fields
+ /api?_unique=1    select unique
 |#
 (define (api/query-handler an-api)
   (define crud-op 'query)
@@ -186,7 +187,7 @@ ignore primary key field if it's in the dictionary
        (define vstr (extract-binding/single '* rbs))
        (values "or"
                (for/list ([fn (map string-downcase all-field-names)])
-                 (cons fn (string-append "%" vstr "%"))))]
+                 (cons fn (string-replace vstr "*" "%"))))]
       [else     
        ; search for query params that match any of the field names in the db
        (values
@@ -194,7 +195,7 @@ ignore primary key field if it's in the dictionary
         (for/list ([fn (map string-downcase all-field-names)]
                    #:when (exists-binding? (string->symbol fn) rbs))
           (define vstr (extract-binding/single (string->symbol fn) rbs))
-          (cons fn (string-append "%" vstr "%"))))]))
+          (cons fn (string-replace vstr "*" "%"))))]))
 
   ; (string . string) -> string
   (define (build-where-condition wfld)
@@ -232,7 +233,11 @@ ignore primary key field if it's in the dictionary
           (extract-where-fields field-map all-field-names req)) ; [listof (string . string)] or #f
         (define where-string (build-where-clause where-fields join-op))
 
-        (define sql-str (format "select ~a from ~a~a~a"
+        (define unique-string (if (exists-binding? '_distinct (request-bindings req))
+                                  " DISTINCT " ""))
+
+        (define sql-str (format "select~a ~a from ~a~a~a"
+                                unique-string
                                 (string-join select-field-names ", ")
                                 (db-bind-table bndg)
                                 where-string
@@ -240,17 +245,33 @@ ignore primary key field if it's in the dictionary
         (define stmt (prepare db sql-str))
         (define stmt+params (bind-prepared-statement stmt (map cdr where-fields)))
 
-        (define result (query-rows db stmt+params))
+        (define results (query-rows db stmt+params))
   
         ;(printf "~nQuery: ~a~nBind: ~a~n ~nResult:~n~a~n" (send stmt get-stmt) (map cdr where-fields) result)
         ;(printf "select field names: ~a~nfield map: ~a~n" select-field-names (db-bind-field-map bndg))
 
+        (define joins-requested? (exists-binding? '_joins (request-bindings req)))
         
-        (apply-post-wrapper
-         handler-wrapper crud-op
-         (map (λ(row) (result-vector->dict (db-bind-field-map bndg) select-field-names row))
-              result))))]))
-
+        (define result/jsexpr
+          (let [(R (map (λ(row)
+                          (define fields-hash (result-vector->dict field-map select-field-names row))
+                          (cond
+                            [joins-requested?
+                             (define id (hash-ref fields-hash
+                                                  (db-field-json-symbol
+                                                   (hash-ref field-map
+                                                             (string-downcase (db-bind-primkey bndg))))))
+                             (add-joins db crud-op (db-bind-joins bndg) fields-hash id)]
+                            [else fields-hash]))
+                        results))]
+            (cond
+              [(and (not joins-requested?) (= 1 (length select-field-names)))
+                ; collapse singleton dictionaries to a list of values
+               (for/list ([dict R]) (cdar (hash->list dict)))]
+               ;(for/list ([(key value) R]) value)]
+              [else R])))
+        
+        (apply-post-wrapper handler-wrapper crud-op result/jsexpr)))]))
 
 
 
@@ -289,13 +310,64 @@ ignore primary key field if it's in the dictionary
            (define result (query-maybe-row db stmt id))
            
            (unless result (raise-api-error "invalid id"))
-  
-           (apply-post-wrapper
-            handler-wrapper crud-op
-            (result-vector->dict (db-bind-field-map bndg) select-field-names result))))
+
+           (define fields-hash
+             (result-vector->dict (db-bind-field-map bndg) select-field-names result))
+
+           (define joined-hash (add-joins db 'read (db-bind-joins bndg) fields-hash id))
+
+           (apply-post-wrapper handler-wrapper crud-op joined-hash)))
         req))]))
 
 
+; connection? crud-op/c join-spec/c dict any -> dict
+; adds nested dictionaries based on joins
+(define (add-joins db crud-op joins base-hash id)
+  (for/fold ([built-hash base-hash])
+            [(join joins)]
+    ; joins:
+    ; json-key | Foreign table | Foreign-key (to match this table's PK)
+    ; json-key | [Foreign table Foreign-table-primary-key] [Junction-table Junction-table-Foreign-Key-1] Junction-table-Foreign-key-2 (to match this table's PK)
+    (match join
+      [(list json-key [list f-tbl flds] f-key/f-tbl)
+       (define all-field-names (db-fields->names flds))
+       (define field-map (db-fields->hash flds))
+          
+       (define stmt (format "SELECT ~a FROM ~a WHERE ~a.~a = ?"
+                            (string-join
+                             (for/list ([fn all-field-names])
+                               (format "~a.~a" f-tbl fn)) ", ")
+                            f-tbl f-tbl f-key/f-tbl))
+       (define result (query-rows db stmt id))
+       (define js-list
+         (map (λ(row) (result-vector->dict field-map all-field-names row)) result))
+          
+       (hash-set built-hash json-key js-list)]
+         
+      [(list json-key [list f-tbl flds pk/f-tbl] [list j-tbl f-tbl-f-key/j-tbl] f-key/j-tbl)
+       (define all-field-names (db-fields->names flds))
+       (define field-map (db-fields->hash flds))
+
+       (define stmt (format "SELECT ~a FROM ~a
+                                INNER JOIN ~a ON ~a.~a = ~a.~a
+                                WHERE ~a.~a = ?"
+                            (string-join
+                             (for/list ([fn all-field-names])
+                               (format "~a.~a" f-tbl fn)) ", ")
+                            f-tbl
+                            ; inner join
+                            j-tbl   ; junction table
+                            f-tbl pk/f-tbl  ; f-tbl.primkey =
+                            j-tbl f-tbl-f-key/j-tbl
+                            ; where
+                            j-tbl  f-key/j-tbl))
+
+       (define result (query-rows db stmt id))
+       (define js-list
+         (map (λ(row) (result-vector->dict field-map all-field-names row)) result))
+          
+       (hash-set built-hash json-key js-list)])))
+  
 
 
 #|
