@@ -135,6 +135,12 @@ With the server above running, the follow endpoints are provided:
                               are ignored. See the note above about the wildcard character in
                               <data>."
                              'cont)
+                       (list @~ 'cont)
+                       (list @tt{_joins=1} @tt{/api-endpoint?_joins=1})
+                       (list @elem{Includes nested data from joined tables in the output. By
+                    default, joins are not performed and included.
+                    See @elemref["joins-details"]{the details on the @racket[#:joins] clause}.}
+                             'cont)
                     )]
   @(linebreak)}
 
@@ -403,6 +409,7 @@ The most comprehensive form of the column schema is:
 
  See the @secref{hooks} section for descriptions of the optional keyword arguments.
 
+ @elemtag["joins-details"]
  The @racket[#:joins] clause specifies additional tables to which the primary one may be
  joined, based on its primary key. It supports two scenarios: a simple join to another foreign
  table based on a matching foreign key; or a junction table.
