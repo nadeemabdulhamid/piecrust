@@ -330,7 +330,7 @@ the @racket[create-api-manager] form.
 
 @section{API Documentation}
 
-@defthing[crud-op/c (symbols 'create 'query 'read 'update 'delete)]
+@defthing[#:kind "procedure" crud-op/c contract? #:value (symbols 'create 'query 'read 'update 'delete)]
 
 @defform[#:literals (endpoint-path database-conn table-name columns primary-key)
          (create-api-manager (code:line)
@@ -403,9 +403,28 @@ The most comprehensive form of the column schema is:
 
  See the @secref{hooks} section for descriptions of the optional keyword arguments.
 
- @defthing[join-spec/c (or/c (list/c symbol? (list/c string? (listof col-schema)) string?)
-                             (list/c symbol? (list/c string? (listof col-schema) string?)
-                                     (list/c string? string?) string?))]
+ The @racket[#:joins] clause specifies additional tables to which the primary one may be
+ joined, based on its primary key. It supports two scenarios: a simple join to another foreign
+ table based on a matching foreign key; or a junction table.
+
+ @defthing[#:kind "procedure"
+           join-spec/c contract?
+           #:value (or/c (list/c symbol? (list/c string? (listof col-schema)) string?)
+                         (list/c symbol? (list/c string? (listof col-schema) string?)
+                                 (list/c string? string?) string?))]
+
+ For the simple join, specify the
+ JSON key with which the joined data will be associated (as a nested JSON expression in the
+ returned dictionary for each row of data), the name of the foreign table, a list of columns to
+ include from matching rows in the foreign table, and the name of the foreign key.
+
+ For a join that goes through a junction table, provide again the JSON key with which the data will
+ be associated in the output; the name of the foreign table, its list of columns to select, and
+ the primary key of the foreign table; and then the name of the junction table and the (foreign)
+ key in the junction table that corresponds to the primary key of the foreign table; and, finally,
+ the name of the (foreign) key in the junction table that corresponds to the primary key of the
+ table associated with this endpoint.
+ 
 
 }
 
