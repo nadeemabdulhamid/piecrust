@@ -132,9 +132,7 @@ ignore primary key field if it's in the dictionary
                (cons fn (jsexpr->sql-type val sql-type))])))
 
         (define sql-str (build-insert-sql bndg field-vals))
-        (define stmt (prepare db sql-str))
-        (define stmt+params (bind-prepared-statement stmt (map cdr field-vals)))
-        (define result (query db stmt+params))
+        (define result (apply query (append (list db sql-str) (map cdr field-vals))))
   
         (define pk-symbol (db-field-json-symbol (hash-ref field-map pk)))
         (define new-id (cdr (assoc 'insert-id (simple-result-info result))))
@@ -242,10 +240,7 @@ ignore primary key field if it's in the dictionary
                                 (db-bind-table bndg)
                                 where-string
                                 sort-string))
-        (define stmt (prepare db sql-str))
-        (define stmt+params (bind-prepared-statement stmt (map cdr where-fields)))
-
-        (define results (query-rows db stmt+params))
+        (define results (apply query-rows (append (list db sql-str) (map cdr where-fields))))
   
         ;(printf "~nQuery: ~a~nBind: ~a~n ~nResult:~n~a~n" (send stmt get-stmt) (map cdr where-fields) result)
         ;(printf "select field names: ~a~nfield map: ~a~n" select-field-names (db-bind-field-map bndg))
@@ -302,11 +297,10 @@ ignore primary key field if it's in the dictionary
            (define select-field-names (build-select-field-list field-map all-field-names req))
            (when (empty? select-field-names) (raise-api-error "no fields selected"))
            
-           (define stmt
-             (prepare db (format "select ~a from ~a where ~a = ?"
-                                 (string-join select-field-names ", ")
-                                 (db-bind-table bndg)
-                                 (string-downcase (db-bind-primkey bndg)))))
+           (define stmt (format "select ~a from ~a where ~a = ?"
+                                (string-join select-field-names ", ")
+                                (db-bind-table bndg)
+                                (string-downcase (db-bind-primkey bndg))))
            (define result (query-maybe-row db stmt id))
            
            (unless result (raise-api-error "invalid id"))
@@ -409,9 +403,8 @@ ignore primary key field if it's in the dictionary
                                    (string-join assign-strs ", ")
                                    pk))
 
-           (define stmt (prepare db sql-str))
-           (define stmt+params (bind-prepared-statement stmt `(,@(map cdr field-vals) ,id)))
-           (define result (query db stmt+params))
+           (define result (apply query (append (list db sql-str) `(,@(map cdr field-vals) ,id))))
+
            (define row-count (cdr (assoc 'affected-rows (simple-result-info result))))
 
            (if (zero? row-count)
@@ -439,9 +432,7 @@ ignore primary key field if it's in the dictionary
            (define pk (string-downcase (db-bind-primkey bndg)))  ; primary key name
 
            (define sql-str (format "DELETE FROM ~a WHERE ~a = ?" (db-bind-table bndg) pk))
-           (define stmt (prepare db sql-str))
-           (define stmt+params (bind-prepared-statement stmt (list id)))
-           (define result (query db stmt+params))
+           (define result (query db sql-str id))
 
            (define row-count (cdr (assoc 'affected-rows (simple-result-info result))))
 
