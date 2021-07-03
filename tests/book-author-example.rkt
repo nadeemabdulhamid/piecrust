@@ -1,5 +1,7 @@
 #lang racket
 
+;; This example demonstrates the 3 types of joins
+
 (require piecrust)
 
 (require db
@@ -20,7 +22,7 @@
                          Name TEXT);")
 
   (query-exec dbc "CREATE TABLE Books ( ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                         Title TEXT, PubId INTEGER NULL);")
+                         Title TEXT, PubId INTEGER);")
 
   (query-exec dbc "CREATE TABLE BookAuthor ( ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                          Author_ID INTEGER, Book_ID INTEGER);")
