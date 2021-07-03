@@ -256,7 +256,7 @@ ignore primary key field if it's in the dictionary
                                                   (db-field-json-symbol
                                                    (hash-ref field-map
                                                              (string-downcase (db-bind-primkey bndg))))))
-                             (add-joins db crud-op (db-bind-joins bndg) fields-hash id)]
+                             (add-joins db bndg crud-op fields-hash id)]
                             [else fields-hash]))
                         results))]
             (cond
@@ -308,7 +308,7 @@ ignore primary key field if it's in the dictionary
            (define fields-hash
              (result-vector->dict (db-bind-field-map bndg) select-field-names result))
 
-           (define joined-hash (add-joins db 'read (db-bind-joins bndg) fields-hash id))
+           (define joined-hash (add-joins db bndg 'read fields-hash id))
 
            (apply-post-wrapper handler-wrapper crud-op joined-hash)))
         req))]))
@@ -316,13 +316,19 @@ ignore primary key field if it's in the dictionary
 
 ; connection? crud-op/c join-spec/c dict any -> dict
 ; adds nested dictionaries based on joins
-(define (add-joins db crud-op joins base-hash id)
+(define (add-joins db bndg crud-op base-hash id)
+  (define tbl-name (db-bind-table bndg))
+  (define joins (db-bind-joins bndg))
+  (define pk/tbl (db-bind-primkey bndg))
+  
   (for/fold ([built-hash base-hash])
             [(join joins)]
     ; joins:
-    ; json-key | Foreign table | Foreign-key (to match this table's PK)
-    ; json-key | [Foreign table Foreign-table-primary-key] [Junction-table Junction-table-Foreign-Key-1] Junction-table-Foreign-key-2 (to match this table's PK)
+    ; [list json-key  [Foreign-table Field-binding]   Foreign-key-(to match this table's PK value)]  <--- one-to-many
+    ; [list json-key  [list Foreign-table Field-binding Foreign-table-primary-key]  This-table-Foreign-key-(to match Foreign table PK)]    <--- many-to-one
+    ; [list json-key  [list Foreign-table Field-binding Foreign-table-primary-key] [list Junction-table Junction-table-Foreign-Key-1] Junction-table-Foreign-key-2 (to match this table's PK)]
     (match join
+      ;;  ONE-TO-MANY
       [(list json-key [list f-tbl flds] f-key/f-tbl)
        (define all-field-names (db-fields->names flds))
        (define field-map (db-fields->hash flds))
@@ -337,7 +343,36 @@ ignore primary key field if it's in the dictionary
          (map (λ(row) (result-vector->dict field-map all-field-names row)) result))
           
        (hash-set built-hash json-key js-list)]
-         
+
+      ;; MANY-TO-ONE
+      [(list json-key [list f-tbl flds pk/f-tbl] f-key/this-tbl)
+       (define all-field-names (db-fields->names flds))
+       (define field-map (db-fields->hash flds))
+
+       ; need to get the foreign key value
+       (define f-id
+         (query-maybe-value db (format "SELECT ~a FROM ~a WHERE ~a = ?" f-key/this-tbl tbl-name pk/tbl) id))
+
+       (cond
+         [(or (sql-null? f-id)
+              (false? f-id)) built-hash]
+         [else 
+          (define stmt (format "SELECT ~a FROM ~a WHERE ~a.~a = ?"
+                               (string-join
+                                (for/list ([fn all-field-names])
+                                  (format "~a.~a" f-tbl fn)) ", ")
+                               f-tbl
+                               ; WHERE
+                               f-tbl pk/f-tbl))
+       
+          (define result (query-maybe-row db stmt f-id))
+          (define jsexpr (if (or (sql-null? result) (false? result))
+                             'null
+                             (result-vector->dict field-map all-field-names result)))
+          
+          (hash-set built-hash json-key jsexpr)])]
+      
+      ;; MANY-TO-MANY
       [(list json-key [list f-tbl flds pk/f-tbl] [list j-tbl f-tbl-f-key/j-tbl] f-key/j-tbl)
        (define all-field-names (db-fields->names flds))
        (define field-map (db-fields->hash flds))

@@ -115,6 +115,8 @@
 
   (define joins/final (for/list ([join joins])
                         (match join
+                          [(list a [list b fld-spec c] d)
+                           (list a [list b (map field-bind-spec->db-field fld-spec) c] d)]
                           [(list a [list b fld-spec] c)
                            (list a [list b (map field-bind-spec->db-field fld-spec)] c)]
                           [(list a [list b fld-spec c] [list d e] f)

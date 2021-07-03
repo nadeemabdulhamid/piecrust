@@ -41,15 +41,18 @@
 
 
 ; joins:
-; [list json-key   Foreign-table   Foreign-key-(to match this table's PK value)]
-; [list json-key  [list Foreign-table  Foreign-table-primary-key] [list Junction-table Junction-table-Foreign-Key-1] Junction-table-Foreign-key-2 (to match this table's PK)]
+; [list json-key  [Foreign-table Field-binding]   Foreign-key-(to match this table's PK value)]  <--- one-to-many
+; [list json-key  [list Foreign-table Field-binding Foreign-table-primary-key]  This-table-Foreign-key-(to match Foreign table PK)]    <--- many-to-one
+; [list json-key  [list Foreign-table Field-binding Foreign-table-primary-key] [list Junction-table Junction-table-Foreign-Key-1] Junction-table-Foreign-key-2 (to match this table's PK)]
 (define join-spec/c
-  (or/c (list/c symbol? (list/c string? (listof field-bind-spec/c)) string?)
+  (or/c (list/c symbol? (list/c string? (listof field-bind-spec/c) string?) string?)
+        (list/c symbol? (list/c string? (listof field-bind-spec/c)) string?)
         (list/c symbol? (list/c string? (listof field-bind-spec/c) string?)
                 (list/c string? string?) string?)))
 
 (define join-fields/c
-  (or/c (list/c symbol? (list/c string? (listof db-field?)) string?)
+  (or/c (list/c symbol? (list/c string? (listof db-field?) string?) string?)
+        (list/c symbol? (list/c string? (listof db-field?)) string?)
         (list/c symbol? (list/c string? (listof db-field?) string?) (list/c string? string?) string?)))
 
 

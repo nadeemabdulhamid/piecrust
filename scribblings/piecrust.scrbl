@@ -54,7 +54,7 @@ dispatching function (based on @racket[dispatch-rules]) that can be used with @r
 
 @subsection{Minimal Example}
 
-(Running code for this example is in the @tt{piecrust/test/minimal-example.rkt} file.)
+(Running code for this example is in the @tt{piecrust/tests/minimal-example.rkt} file.)
 
 Consider an SQLite database set up like this:
 
@@ -139,7 +139,7 @@ With the server above running, the follow endpoints are provided:
                        (list @tt{_joins=1} @tt{/api-endpoint?_joins=1})
                        (list @elem{Includes nested data from joined tables in the output. By
                     default, joins are not performed and included.
-                    See @elemref["joins-details"]{the details on the @racket[#:joins] clause}.}
+                    See @secref["joins-details"].}
                              'cont)
                     )]
   @(linebreak)}
@@ -147,7 +147,8 @@ With the server above running, the follow endpoints are provided:
   @item{@element[(style #f (list hilite))]{@elem["(GET)" @hspace[5] @tt{/api-endpoint/<id>}]}
         @(linebreak)
         Retrieves the single data record with the given primary key value (@tt{<id>}
-        as a JSON dictionary.
+        as a JSON dictionary. Nested data from joined tables is included in the output.
+        See @secref["joins-details"].
 
         @tabular[#:style 'boxed
                  #:row-properties '(() bottom-border ())
@@ -203,7 +204,7 @@ With the server above running, the follow endpoints are provided:
 
 @subsection{Extended Example}
 
-(Running code for this example is in the @tt{piecrust/test/shopping-list-example.rkt} file.)
+(Running code for this example is in the @tt{piecrust/tests/shopping-list-example.rkt} file.)
 
 Consider an SQLite database set up with two tables like this:
 
@@ -391,9 +392,9 @@ the @racket[create-api-manager] form.
  endpoint from which the API will be served, for example, @racket["/myapi/v1"].
 
 The most comprehensive form of the column schema is:
- @defform[#:literals (list)
-          (list (list sql-column-name  json-key-name)
-                sql-type  null-ok?  col-description)]
+ @defform[#:id col-schema #:literals (list) 
+          (list (list "sql-column-name" json-key)
+                sql-type  null-ok?  "col-description")]
 
  @emph{sql-column-name} should be the name of the column in the SQL table. @emph{json-key-name}
  will be used as the key label for matching fields in the JSON output. Requests to create,
@@ -409,30 +410,49 @@ The most comprehensive form of the column schema is:
 
  See the @secref{hooks} section for descriptions of the optional keyword arguments.
 
- @elemtag["joins-details"]
+ @subsubsub*section[#:tag "joins-details"]{Details on the @racket[#:joins] clause}
+ 
  The @racket[#:joins] clause specifies additional tables to which the primary one may be
- joined, based on its primary key. It supports two scenarios: a simple join to another foreign
- table based on a matching foreign key; or a junction table.
+ joined, based on its primary key. It supports three scenarios, described in the next
+ paragraph. In the description that follows, "primary table" refers to the table declared in the
+ @racket[create-api-manager] clause. The "secondary table" is the one from which associated
+ data is nested in the primary JSON output.
+ Example code for each of the three scenarios is provided in the
+ @tt{piecrust/tests/book-author-example.rkt} file of the Github repo.)
 
  @defthing[#:kind "procedure"
            join-spec/c contract?
            #:value (or/c (list/c symbol? (list/c string? (listof col-schema)) string?)
+                         (list/c symbol? (list/c string? (listof col-schema) string?) string?)
                          (list/c symbol? (list/c string? (listof col-schema) string?)
                                  (list/c string? string?) string?))]
 
- For the simple join, specify the
- JSON key with which the joined data will be associated (as a nested JSON expression in the
- returned dictionary for each row of data), the name of the foreign table, a list of columns to
- include from matching rows in the foreign table, and the name of the foreign key.
+ @itemlist[
+ @item{@bold{One-to-many} @emph{(where a foreign key in the secondary table links to the primary
+   key of the primary table)} Specify the JSON key with which the joined data will be associated
+   (as a nested JSON list in the returned dictionary for each row of data), the name of
+   the foreign table, a list of columns to include from matching rows in the foreign table,
+   and the name of the foreign key.
+  @racketblock[`((json-key ["sec-tbl" (col-schema ...)] "for-key/sec-tbl"))]}
 
- For a join that goes through a junction table, provide again the JSON key with which the data will
- be associated in the output; the name of the foreign table, its list of columns to select, and
- the primary key of the foreign table; and then the name of the junction table and the (foreign)
- key in the junction table that corresponds to the primary key of the foreign table; and, finally,
- the name of the (foreign) key in the junction table that corresponds to the primary key of the
- table associated with this endpoint.
- 
+ @item{@bold{Many-to-one} @emph{(where a foreign key in the primary table links to the primary
+  key of a secondary table)} Specify the JSON key with which the joined data will be associated
+  (as a nested dictionary - not a list), the name of the foreign table, its list of columns to
+  include, and its primary key; then, the foreign key in the primary table.
+  @racketblock[`((json-key ["sec-tbl" (col-schema ...) "pri-key/sec-tbl"] "for-key/prim-tbl"))]}
 
+ @item{@bold{Many-to-many} @emph{(where a junction table is used to associate pairs of rows from
+  the primary and a secondary table)} Provide the JSON key with which the data will
+ be associated in the output; the name of the secondary table, its list of columns to select, and
+ the primary key of the secondary table; and then the name of the junction table and the foreign
+ key in the junction table that corresponds to the primary key of the secondary table; and, finally,
+ the name of the (second) foreign key in the junction table that corresponds to the primary key of the
+ primary table.
+  @racketblock[`((json-key ["sec-tbl" (col-schema ...) "pri-key/sec-tbl"]
+                           ["j-tbl" "for-key-of-sec-tbl/j-tbl"]
+                           "for-key-of-prim-tbl/j-tbl"))] }
+
+ ]
 }
 
 
